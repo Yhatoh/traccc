@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2021 CERN for the benefit of the ACTS project
+ * (c) 2023 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -10,6 +10,8 @@
 #include <Kokkos_Core.hpp>
 
 namespace traccc::kokkos {
+
+#define WARP_SIZE 32
 
 // defining MemSpace to generalize in case they use other
 #ifdef KOKKOS_ENABLE_CUDA

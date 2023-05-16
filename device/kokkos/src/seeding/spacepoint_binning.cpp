@@ -43,21 +43,15 @@ spacepoint_binning::output_type spacepoint_binning::operator()(
         grid_capacities_buff;
 
     // Calculate the number of threads and thread blocks to run the kernels for.
-    const unsigned int num_threads = 32 * 8;
-    const unsigned int num_blocks = (sp_size + num_threads - 1) / num_threads;
+    // const unsigned int num_threads = 32 * 8;
+    // const unsigned int num_blocks = (sp_size + num_threads - 1) /
+    // num_threads;
 
     Kokkos::parallel_for(
-        "count_grid_capacities", team_policy(num_blocks, Kokkos::AUTO),
-        KOKKOS_LAMBDA(const member_type& team_member) {
-            Kokkos::parallel_for(
-                Kokkos::TeamThreadRange(team_member, num_threads),
-                [&](const int& thr) {
-                    device::count_grid_capacities(
-                        team_member.league_rank() * team_member.team_size() +
-                            thr,
-                        m_config, m_axes.first, m_axes.second, spacepoints_view,
-                        grid_capacities_view);
-                });
+        "count_grid_capacities", sp_size, KOKKOS_LAMBDA(const uint64_t i) {
+            device::count_grid_capacities(i, m_config, m_axes.first,
+                                          m_axes.second, spacepoints_view,
+                                          grid_capacities_view);
         });
 
     // Copy grid capacities back to the host
@@ -76,16 +70,8 @@ spacepoint_binning::output_type spacepoint_binning::operator()(
 
     // Populate the grid.
     Kokkos::parallel_for(
-        "populate_grid", team_policy(num_blocks, Kokkos::AUTO),
-        KOKKOS_LAMBDA(const member_type& team_member) {
-            Kokkos::parallel_for(
-                Kokkos::TeamThreadRange(team_member, num_threads),
-                [&](const int& thr) {
-                    device::populate_grid(
-                        team_member.league_rank() * team_member.team_size() +
-                            thr,
-                        m_config, spacepoints_view, grid_view);
-                });
+        "populate_grid", sp_size, KOKKOS_LAMBDA(const uint64_t i) {
+            device::populate_grid(i, m_config, spacepoints_view, grid_view);
         });
 
     // Return the freshly filled buffer.

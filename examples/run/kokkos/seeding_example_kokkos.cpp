@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2021-2022 CERN for the benefit of the ACTS project
+ * (c) 2021-2023 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -9,7 +9,7 @@
 #include "traccc/efficiency/seeding_performance_writer.hpp"
 #include "traccc/io/read_geometry.hpp"
 #include "traccc/io/read_spacepoints.hpp"
-#include "traccc/kokkos/seeding/spacepoint_binning.hpp"
+#include "traccc/kokkos/seeding/seeding_algorithm.hpp"
 #include "traccc/options/common_options.hpp"
 #include "traccc/options/handle_argument_errors.hpp"
 #include "traccc/options/seeding_input_options.hpp"
@@ -20,6 +20,7 @@
 
 // VecMem include(s).
 #include <vecmem/memory/host_memory_resource.hpp>
+#include <vecmem/utils/copy.hpp>
 
 // System include(s).
 #include <chrono>
@@ -58,6 +59,11 @@ int seq_run(const traccc::seeding_input_config& /*i_cfg*/,
                                  host_mr);
     traccc::track_params_estimation tp(host_mr);
 
+    vecmem::copy copy;
+
+    // Kokkos Seeding algorithm
+    traccc::kokkos::seeding_algorithm sa_kokkos{mr, copy};
+
     // KOKKOS Spacepoint Binning
     traccc::kokkos::spacepoint_binning m_spacepoint_binning(finder_config,
                                                             grid_config, mr);
@@ -76,6 +82,10 @@ int seq_run(const traccc::seeding_input_config& /*i_cfg*/,
         traccc::seeding_algorithm::output_type seeds;
         traccc::track_params_estimation::output_type params;
 
+        // Instantiate Kokkos containers/collections
+        traccc::seed_collection_types::buffer seeds_kokkos_buffer(0,
+                                                                  *(mr.host));
+
         {  // Start measuring wall time
             traccc::performance::timer wall_t("Wall time", elapsedTimes);
 
@@ -91,22 +101,28 @@ int seq_run(const traccc::seeding_input_config& /*i_cfg*/,
                     surface_transforms, common_opts.input_data_format);
             }  // stop measuring hit reading timer
 
-            traccc::spacepoint_collection_types::host& spacepoints_per_event =
-                reader_output.spacepoints;
+            auto& spacepoints_per_event = reader_output.spacepoints;
             auto& modules_per_event = reader_output.modules;
-
-            {  // Spacepoin binning for kokkos
-                traccc::performance::timer t("Spacepoint binning (kokkos)",
-                                             elapsedTimes);
-                m_spacepoint_binning(vecmem::get_data(spacepoints_per_event));
-            }
 
             /*----------------------------
                 Seeding algorithm
             ----------------------------*/
 
-            // CPU
+            traccc::spacepoint_collection_types::buffer
+                spacepoints_kokkos_buffer(spacepoints_per_event.size(),
+                                          mr.main);
 
+            copy(vecmem::get_data(spacepoints_per_event),
+                 spacepoints_kokkos_buffer);
+
+            {
+                traccc::performance::timer t("Seeding (kokkos)", elapsedTimes);
+
+                // Reconstruct the spacepoints into seeds.
+                seeds_kokkos_buffer = sa_kokkos(spacepoints_kokkos_buffer);
+            }  // stop measuring seedin kokkos timer
+
+            // CPU
             if (run_cpu) {
                 traccc::performance::timer t("Seeding  (cpu)", elapsedTimes);
                 seeds = sa(spacepoints_per_event);
