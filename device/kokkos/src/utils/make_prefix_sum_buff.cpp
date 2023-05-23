@@ -30,10 +30,8 @@ vecmem::data::vector_buffer<device::prefix_sum_element_t> make_prefix_sum_buff(
     copy.setup(prefix_sum_buff);
 
     // Fill the prefix sum vector
-    // kernels::fill_prefix_sum<<<(sizes_sum_view.size() / 32) + 1, 32>>>(
-    //    sizes_sum_view, prefix_sum_buff);
-    uint64_t num_blocks = (sizes_sum_view.size() / 32) + 1;
-    uint64_t num_threads = 32;
+    unsigned int num_blocks = (sizes_sum_view.size() / 32) + 1;
+    unsigned int num_threads = 32;
     auto data_prefix_sum_buff = vecmem::get_data(prefix_sum_buff);
     Kokkos::parallel_for(
         "fill_prefix_sum", team_policy(num_blocks, num_threads),
