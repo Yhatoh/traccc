@@ -21,24 +21,25 @@ namespace traccc::kokkos {
 
 spacepoint_binning::spacepoint_binning(
     const seedfinder_config& config, const spacepoint_grid_config& grid_config,
-    const traccc::memory_resource& mr)
-    : m_config(config), m_axes(get_axes(grid_config, *(mr.host))), m_mr(mr) {
-    m_copy = std::make_unique<vecmem::copy>();
-}
+    const traccc::memory_resource& mr, vecmem::copy& copy)
+    : m_config(config),
+      m_axes(get_axes(grid_config, (mr.host ? *(mr.host) : mr.main))),
+      m_mr(mr),
+      m_copy(copy) {}
 
 spacepoint_binning::output_type spacepoint_binning::operator()(
     const spacepoint_collection_types::const_view& spacepoints_view) const {
 
     // Get the spacepoint sizes from the view
-    auto sp_size = m_copy->get_size(spacepoints_view);
+    auto sp_size = m_copy.get_size(spacepoints_view);
 
     // Set up the container that will be filled with the required capacities for
     // the spacepoint grid.
     const std::size_t grid_bins = m_axes.first.n_bins * m_axes.second.n_bins;
     vecmem::data::vector_buffer<unsigned int> grid_capacities_buff(grid_bins,
                                                                    m_mr.main);
-    m_copy->setup(grid_capacities_buff);
-    m_copy->memset(grid_capacities_buff, 0);
+    m_copy.setup(grid_capacities_buff);
+    m_copy.memset(grid_capacities_buff, 0);
     vecmem::data::vector_view<unsigned int> grid_capacities_view =
         grid_capacities_buff;
 
@@ -57,7 +58,7 @@ spacepoint_binning::output_type spacepoint_binning::operator()(
     // Copy grid capacities back to the host
     vecmem::vector<unsigned int> grid_capacities_host(m_mr.host ? m_mr.host
                                                                 : &(m_mr.main));
-    (*m_copy)(grid_capacities_buff, grid_capacities_host);
+    m_copy(grid_capacities_buff, grid_capacities_host);
 
     // Create the grid buffer.
     sp_grid_buffer grid_buffer(
@@ -65,7 +66,7 @@ spacepoint_binning::output_type spacepoint_binning::operator()(
         std::vector<std::size_t>(grid_capacities_host.begin(),
                                  grid_capacities_host.end()),
         m_mr.main, m_mr.host, vecmem::data::buffer_type::resizable);
-    m_copy->setup(grid_buffer._buffer);
+    m_copy.setup(grid_buffer._buffer);
     sp_grid_view grid_view = grid_buffer;
 
     // Populate the grid.

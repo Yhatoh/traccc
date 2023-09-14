@@ -62,11 +62,8 @@ int seq_run(const traccc::seeding_input_config& /*i_cfg*/,
     vecmem::copy copy;
 
     // Kokkos Seeding algorithm
-    traccc::kokkos::seeding_algorithm sa_kokkos{mr, copy};
-
-    // KOKKOS Spacepoint Binning
-    traccc::kokkos::spacepoint_binning m_spacepoint_binning(finder_config,
-                                                            grid_config, mr);
+    traccc::kokkos::seeding_algorithm sa_kokkos{finder_config, grid_config,
+                                                filter_config, mr, copy};
 
     // performance writer
     traccc::seeding_performance_writer sd_performance_writer(

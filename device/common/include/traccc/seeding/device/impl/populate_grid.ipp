@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2021-2022 CERN for the benefit of the ACTS project
+ * (c) 2021-2023 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -12,7 +12,7 @@
 
 namespace traccc::device {
 
-TRACCC_DEVICE
+TRACCC_HOST_DEVICE
 inline void populate_grid(
     unsigned int globalIndex, const seedfinder_config& config,
     const spacepoint_collection_types::const_view& spacepoints_view,
