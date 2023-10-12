@@ -12,7 +12,9 @@ traccc_add_test(
     sycl
 
     # Define the sources for the test.
+    test_clusterization.sycl
     test_kalman_filter.sycl
+    test_spacepoint_formation.sycl
 
     LINK_LIBRARIES
     GTest::gtest_main
