@@ -32,6 +32,11 @@
 #include <algorithm>
 #include <vector>
 
+// TO ERASE
+#include <iostream>
+#define dbg(var) cout << #var << " = " << var << "\n";
+#define label(var) cout << var << "\n";
+
 namespace traccc::kokkos {
 
 seed_finding::seed_finding(const seedfinder_config& config,
@@ -77,6 +82,7 @@ seed_finding::output_type seed_finding::operator()(
         });
 
     // Count the number of doublets that we need to produce.
+    label("COUNT DOUBLETS");
     {
         sp_grid_const_view sp_grid = g2_view;
         vecmem::data::vector_view<const device::prefix_sum_element_t>
@@ -114,6 +120,7 @@ seed_finding::output_type seed_finding::operator()(
         m_copy.get_size(doublet_counter_buffer);
 
     // Find all of the spacepoint doublets.
+    label("FIND DOUBLETS");
     {
         sp_grid_const_view sp_grid = g2_view;
         device::doublet_counter_collection_types::const_view doublet_counter =
@@ -145,6 +152,7 @@ seed_finding::output_type seed_finding::operator()(
     // counting kernel for.
 
     // Count the number of triplets that we need to produce.
+    label("COUNT TRIPLETS");
     {
         sp_grid_const_view sp_grid = g2_view;
         device::doublet_counter_collection_types::const_view doublet_counter =
@@ -169,6 +177,7 @@ seed_finding::output_type seed_finding::operator()(
     // count reduction kernel for.
 
     // Reduce the triplet counts per spM.
+    label("REDUCE TRIPLETS");
     {
         device::doublet_counter_collection_types::const_view doublet_counter =
             doublet_counter_buffer;
@@ -192,6 +201,7 @@ seed_finding::output_type seed_finding::operator()(
 
     // Calculate the number of threads and thread blocks to run the triplet
     // Find all of the spacepoint triplets.
+    label("FIND TRIPLETS");
     {
         sp_grid_const_view sp_grid = g2_view;
         device::doublet_counter_collection_types::const_view doublet_counter =
@@ -222,6 +232,7 @@ seed_finding::output_type seed_finding::operator()(
         sizeof(scalar) * m_seedfilter_config.compatSeedLimit * WARP_SIZE * 2);
 
     // Update the weights of all spacepoint triplets.
+    label("UPDATE WEIGHTS");
     {
         sp_grid_const_view sp_grid = g2_view;
         device::triplet_counter_spM_collection_types::const_view spM_tc =
@@ -255,6 +266,7 @@ seed_finding::output_type seed_finding::operator()(
         2);
 
     // Each thread uses max_triplets_per_spM elements of the array'
+    label("SELECT SEED");
     {
         sp_grid_const_view internal_sp_view = g2_view;
         device::triplet_counter_spM_collection_types::const_view spM_tc =
