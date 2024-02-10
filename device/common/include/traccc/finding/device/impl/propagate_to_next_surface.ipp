@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2023 CERN for the benefit of the ACTS project
+ * (c) 2023-2024 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -9,10 +9,11 @@
 
 namespace traccc::device {
 
-template <typename propagator_t, typename config_t>
+template <typename propagator_t, typename bfield_t, typename config_t>
 TRACCC_DEVICE inline void propagate_to_next_surface(
     std::size_t globalIndex, const config_t cfg,
-    typename propagator_t::detector_type::detector_view_type det_data,
+    typename propagator_t::detector_type::view_type det_data,
+    bfield_t field_data,
     vecmem::data::jagged_vector_view<typename propagator_t::intersection_type>
         nav_candidates_buffer,
     bound_track_parameters_collection_types::const_view in_params_view,
@@ -56,15 +57,14 @@ TRACCC_DEVICE inline void propagate_to_next_surface(
     const bound_track_parameters in_par = in_params.at(globalIndex);
 
     // Create propagator
-    propagator_t propagator({}, {});
+    propagator_t propagator(cfg.propagation);
 
     // Create propagator state
     typename propagator_t::state propagation(
-        in_par, det.get_bfield(), det,
-        std::move(nav_candidates.at(globalIndex)));
+        in_par, field_data, det, std::move(nav_candidates.at(globalIndex)));
     propagation._stepping
         .template set_constraint<detray::step::constraint::e_accuracy>(
-            cfg.constrained_step_size);
+            cfg.propagation.stepping.step_constraint);
 
     // Actor state
     // @TODO: simplify the syntax here

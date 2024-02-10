@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2023 CERN for the benefit of the ACTS project
+ * (c) 2023-2024 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -46,7 +46,11 @@ TEST(spacepoint_formation, cpu) {
     const auto [det, name_map] = create_telescope_detector(host_mr, tel_cfg);
 
     // Surface lookup
+<<<<<<< HEAD
     auto surfaces = det.surface_lookup();
+=======
+    auto surfaces = det.surfaces();
+>>>>>>> f2918520ddb7c6e26d80f74d95a69f87a90be846
 
     // Prepare measurement collection
     typename measurement_collection_types::host measurements{&host_mr};
@@ -69,4 +73,8 @@ TEST(spacepoint_formation, cpu) {
     EXPECT_FLOAT_EQ(spacepoints[1].global[0], 180.f);
     EXPECT_FLOAT_EQ(spacepoints[1].global[1], 10.f);
     EXPECT_FLOAT_EQ(spacepoints[1].global[2], 15.f);
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> f2918520ddb7c6e26d80f74d95a69f87a90be846

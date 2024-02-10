@@ -20,8 +20,13 @@ namespace traccc::io::csv {
 ///
 /// @param out A measurement & a cell_module (host) collections
 /// @param filename The file to read the measurement data from
+/// @param do_sort Whether to sort the measurements or not
 ///
 void read_measurements(measurement_reader_output& out,
+<<<<<<< HEAD
                        std::string_view filename);
+=======
+                       std::string_view filename, const bool do_sort = true);
+>>>>>>> f2918520ddb7c6e26d80f74d95a69f87a90be846
 
 }  // namespace traccc::io::csv

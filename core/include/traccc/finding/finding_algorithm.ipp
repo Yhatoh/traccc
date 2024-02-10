@@ -7,11 +7,9 @@
 
 // Project include(s).
 #include "traccc/finding/candidate_link.hpp"
-#include "traccc/utils/compare.hpp"
 
 // System include
 #include <algorithm>
-#include <iostream>
 #include <limits>
 
 namespace traccc {
@@ -19,7 +17,7 @@ namespace traccc {
 template <typename stepper_t, typename navigator_t>
 track_candidate_container_types::host
 finding_algorithm<stepper_t, navigator_t>::operator()(
-    const detector_type& det,
+    const detector_type& det, const bfield_type& field,
     const measurement_collection_types::host& measurements,
     const bound_track_parameters_collection_types::host& seeds) const {
 
@@ -29,30 +27,21 @@ finding_algorithm<stepper_t, navigator_t>::operator()(
      * Measurement Operations
      *****************************************************************/
 
-    // Copy the measurements
-    measurement_collection_types::host sorted_measurements = measurements;
-
-    // Sort the measurements w.r.t geometry barcode
-    std::sort(sorted_measurements.begin(), sorted_measurements.end(),
-              measurement_sort_comp());
-
     // Get copy of barcode uniques
     std::vector<measurement> uniques;
-    uniques.resize(sorted_measurements.size());
+    uniques.resize(measurements.size());
 
-    auto end =
-        std::unique_copy(sorted_measurements.begin(), sorted_measurements.end(),
-                         uniques.begin(), measurement_equal_comp());
-    unsigned int n_modules = end - uniques.begin();
+    auto end = std::unique_copy(measurements.begin(), measurements.end(),
+                                uniques.begin(), measurement_equal_comp());
+    const unsigned int n_modules = end - uniques.begin();
 
     // Get upper bounds of unique elements
     std::vector<unsigned int> upper_bounds;
     upper_bounds.reserve(n_modules);
     for (unsigned int i = 0; i < n_modules; i++) {
-        auto up = std::upper_bound(sorted_measurements.begin(),
-                                   sorted_measurements.end(), uniques[i],
-                                   measurement_sort_comp());
-        upper_bounds.push_back(std::distance(sorted_measurements.begin(), up));
+        auto up = std::upper_bound(measurements.begin(), measurements.end(),
+                                   uniques[i], measurement_sort_comp());
+        upper_bounds.push_back(std::distance(measurements.begin(), up));
     }
 
     // Get the number of measurements of each module
@@ -80,10 +69,12 @@ finding_algorithm<stepper_t, navigator_t>::operator()(
     std::vector<typename candidate_link::link_index_type> tips;
 
     // Create propagator
-    propagator_type propagator({}, {});
+    propagator_type propagator(m_cfg.propagation);
 
     // Copy seed to input parameters
     std::vector<bound_track_parameters> in_params;
+    std::vector<unsigned int> n_trks_per_seed(seeds.size(), 0);
+
     in_params.reserve(seeds.size());
     for (const auto& seed : seeds) {
         in_params.push_back(seed);
@@ -109,10 +100,17 @@ finding_algorithm<stepper_t, navigator_t>::operator()(
         const unsigned int previous_step =
             (step == 0) ? std::numeric_limits<unsigned int>::max() : step - 1;
 
+        std::fill(n_trks_per_seed.begin(), n_trks_per_seed.end(), 0);
+
         for (unsigned int in_param_id = 0; in_param_id < n_in_params;
              in_param_id++) {
 
             bound_track_parameters& in_param = in_params[in_param_id];
+            unsigned int orig_param_id =
+                (step == 0
+                     ? in_param_id
+                     : links[step - 1][param_to_link[step - 1][in_param_id]]
+                           .seed_idx);
 
             /*************************
              * Material interaction
@@ -174,11 +172,15 @@ finding_algorithm<stepper_t, navigator_t>::operator()(
                 if (n_branches > m_cfg.max_num_branches_per_surface) {
                     break;
                 }
+                if (n_trks_per_seed[orig_param_id] >=
+                    m_cfg.max_num_branches_per_initial_seed) {
+                    break;
+                }
 
                 bound_track_parameters bound_param(in_param.surface_link(),
                                                    in_param.vector(),
                                                    in_param.covariance());
-                const auto& meas = sorted_measurements[item_id];
+                const auto& meas = measurements[item_id];
 
                 track_state<transform3_type> trk_state(meas);
 
@@ -197,9 +199,10 @@ finding_algorithm<stepper_t, navigator_t>::operator()(
                         static_cast<unsigned int>(links[step].size());
 
                     n_branches++;
+                    n_trks_per_seed[orig_param_id]++;
 
                     links[step].push_back(
-                        {{previous_step, in_param_id}, item_id});
+                        {{previous_step, in_param_id}, item_id, orig_param_id});
 
                     /*********************************
                      * Propagate to the next surface
@@ -207,10 +210,10 @@ finding_algorithm<stepper_t, navigator_t>::operator()(
 
                     // Create propagator state
                     typename propagator_type::state propagation(
-                        trk_state.filtered(), det.get_bfield(), det);
+                        trk_state.filtered(), field, det);
                     propagation._stepping.template set_constraint<
                         detray::step::constraint::e_accuracy>(
-                        m_cfg.constrained_step_size);
+                        m_cfg.propagation.stepping.step_constraint);
 
                     typename detray::pathlimit_aborter::state s0;
                     typename detray::parameter_transporter<
@@ -281,7 +284,7 @@ finding_algorithm<stepper_t, navigator_t>::operator()(
 
             auto& cand = *it;
 
-            cand = sorted_measurements.at(L.meas_idx);
+            cand = measurements.at(L.meas_idx);
 
             // Break the loop if the iterator is at the first candidate and
             // fill the seed

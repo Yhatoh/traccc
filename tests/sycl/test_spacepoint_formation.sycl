@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2023 CERN for the benefit of the ACTS project
+ * (c) 2023-2024 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -70,10 +70,10 @@ TEST(spacepoint_formation, sycl) {
     auto [det, name_map] = create_telescope_detector(shared_mr, tel_cfg);
     using device_detector_type =
         detray::detector<detray::telescope_metadata<detray::rectangle2D<>>,
-                         covfie::field_view, detray::device_container_types>;
+                         detray::device_container_types>;
 
     // Surface lookup
-    auto surfaces = det.surface_lookup();
+    auto surfaces = det.surfaces();
 
     // Prepare measurement collection
     measurement_collection_types::host measurements{&shared_mr};

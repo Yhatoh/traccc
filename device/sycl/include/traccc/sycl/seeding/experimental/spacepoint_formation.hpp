@@ -31,7 +31,11 @@ namespace traccc::sycl::experimental {
 template <typename detector_t>
 class spacepoint_formation
     : public algorithm<spacepoint_collection_types::buffer(
+<<<<<<< HEAD
           const typename detector_t::detector_view_type&,
+=======
+          const typename detector_t::view_type&,
+>>>>>>> f2918520ddb7c6e26d80f74d95a69f87a90be846
           const measurement_collection_types::const_view&)> {
 
     public:
@@ -50,7 +54,11 @@ class spacepoint_formation
     /// @param measurements  a collection of measurements
     /// @return a spacepoint collection (buffer)
     spacepoint_collection_types::buffer operator()(
+<<<<<<< HEAD
         const typename detector_t::detector_view_type& det_view,
+=======
+        const typename detector_t::view_type& det_view,
+>>>>>>> f2918520ddb7c6e26d80f74d95a69f87a90be846
         const measurement_collection_types::const_view& measurements_view)
         const override;
 
