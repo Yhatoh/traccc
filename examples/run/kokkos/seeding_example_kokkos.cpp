@@ -11,7 +11,6 @@
 #include "traccc/io/read_spacepoints.hpp"
 #include "traccc/kokkos/seeding/seeding_algorithm.hpp"
 #include "traccc/options/common_options.hpp"
-#include "traccc/options/detector_input_options.hpp"
 #include "traccc/options/handle_argument_errors.hpp"
 #include "traccc/options/seeding_input_options.hpp"
 #include "traccc/performance/collection_comparator.hpp"
@@ -35,11 +34,11 @@
 namespace po = boost::program_options;
 
 int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
-            const traccc::common_options& common_opts,
-            const traccc::detector_input_options& det_opts, bool run_cpu) {
+            const traccc::common_options& common_opts, bool run_cpu) {
 
     // Read the surface transforms
-    auto surface_transforms = traccc::io::read_geometry(det_opts.detector_file);
+    auto surface_transforms =
+        traccc::io::read_geometry(common_opts.detector_file);
 
     // Output stats
     uint64_t n_modules = 0;
@@ -99,14 +98,8 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
                     surface_transforms, common_opts.input_data_format);
             }  // stop measuring hit reading timer
 
-            traccc::spacepoint_collection_types::host& spacepoints_per_event =
-                reader_output.spacepoints;
-
-            {  // Spacepoin binning for kokkos
-                traccc::performance::timer t("Spacepoint binning (kokkos)",
-                                             elapsedTimes);
-                m_spacepoint_binning(vecmem::get_data(spacepoints_per_event));
-            }
+            auto& spacepoints_per_event = reader_output.spacepoints;
+            auto& modules_per_event = reader_output.modules;
 
             /*----------------------------
                 Seeding algorithm
@@ -141,8 +134,9 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
             if (run_cpu) {
                 traccc::performance::timer t("Track params  (cpu)",
                                              elapsedTimes);
-                params = tp(std::move(spacepoints_per_event), seeds,
-                            {0.f, 0.f, finder_config.bFieldInZ});
+                params =
+                    tp(std::move(spacepoints_per_event), seeds,
+                       modules_per_event, {0.f, 0.f, finder_config.bFieldInZ});
             }  // stop measuring track params cpu timer
 
         }  // Stop measuring wall time
@@ -175,9 +169,8 @@ int main(int argc, char* argv[]) {
     // Add options
     desc.add_options()("help,h", "Give some help with the program's options");
     traccc::common_options common_opts(desc);
-    traccc::detector_input_options det_opts(desc);
-    traccc::seeding_input_options seeding_input_cfg(desc);
-    desc.add_options()("run-cpu", po::value<bool>()->default_value(false),
+    traccc::seeding_input_config seeding_input_cfg(desc);
+    desc.add_options()("run_cpu", po::value<bool>()->default_value(false),
                        "run cpu tracking as well");
 
     po::variables_map vm;
@@ -188,16 +181,14 @@ int main(int argc, char* argv[]) {
 
     // Read options
     common_opts.read(vm);
-    det_opts.read(vm);
-
     seeding_input_cfg.read(vm);
-    auto run_cpu = vm["run-cpu"].as<bool>();
+    auto run_cpu = vm["run_cpu"].as<bool>();
 
-    std::cout << "Running " << argv[0] << " " << det_opts.detector_file << " "
-              << common_opts.input_directory << " " << common_opts.events
+    std::cout << "Running " << argv[0] << " " << common_opts.detector_file
+              << " " << common_opts.input_directory << " " << common_opts.events
               << std::endl;
 
-    int ret = seq_run(seeding_input_cfg, common_opts, det_opts, run_cpu);
+    int ret = seq_run(seeding_input_cfg, common_opts, run_cpu);
 
     // Finalise Kokkos.
     Kokkos::finalize();
