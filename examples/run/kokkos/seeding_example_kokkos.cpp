@@ -184,8 +184,11 @@ int main(int argc, char* argv[]) {
     seeding_input_cfg.read(vm);
     auto run_cpu = vm["run_cpu"].as<bool>();
 
-    std::cout << "Running " << argv[0] << " " << common_opts.detector_file
-              << " " << common_opts.input_directory << " " << common_opts.events
+    // Tell the user what's happening.
+    std::cout << "\nRunning the tracking chain using Kokkos\n\n"
+              << common_opts << "\n"
+              << det_opts << "\n"
+              << seeding_input_cfg << "\n"
               << std::endl;
 
     int ret = seq_run(seeding_input_cfg, common_opts, run_cpu);
