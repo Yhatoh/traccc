@@ -37,8 +37,8 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
             const traccc::common_options& common_opts, bool run_cpu) {
 
     // Read the surface transforms
-    auto surface_transforms =
-        traccc::io::read_geometry(common_opts.detector_file);
+    auto [surface_transforms, _] =
+        traccc::io::read_geometry(det_opts.detector_file);
 
     // Output stats
     uint64_t n_modules = 0;
@@ -134,9 +134,9 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
             if (run_cpu) {
                 traccc::performance::timer t("Track params  (cpu)",
                                              elapsedTimes);
-                params =
-                    tp(std::move(spacepoints_per_event), seeds,
-                       modules_per_event, {0.f, 0.f, finder_config.bFieldInZ});
+                
+                params = tp(std::move(spacepoints_per_event), seeds,
+                            {0.f, 0.f, finder_config.bFieldInZ});
             }  // stop measuring track params cpu timer
 
         }  // Stop measuring wall time
