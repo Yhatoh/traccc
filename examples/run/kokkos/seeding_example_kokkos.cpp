@@ -169,7 +169,7 @@ int main(int argc, char* argv[]) {
     // Add options
     desc.add_options()("help,h", "Give some help with the program's options");
     traccc::common_options common_opts(desc);
-    traccc::seeding_input_config seeding_input_cfg(desc);
+    traccc::seeding_input_options seeding_input_cfg(desc);
     desc.add_options()("run_cpu", po::value<bool>()->default_value(false),
                        "run cpu tracking as well");
 
