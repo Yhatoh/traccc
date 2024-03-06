@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2021-2024 CERN for the benefit of the ACTS project
+ * (c) 2021-2023 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -9,7 +9,7 @@
 #include "traccc/efficiency/seeding_performance_writer.hpp"
 #include "traccc/io/read_geometry.hpp"
 #include "traccc/io/read_spacepoints.hpp"
-#include "traccc/kokkos/seeding/spacepoint_binning.hpp"
+#include "traccc/kokkos/seeding/seeding_algorithm.hpp"
 #include "traccc/options/common_options.hpp"
 #include "traccc/options/detector_input_options.hpp"
 #include "traccc/options/handle_argument_errors.hpp"
@@ -21,6 +21,7 @@
 
 // VecMem include(s).
 #include <vecmem/memory/host_memory_resource.hpp>
+#include <vecmem/utils/copy.hpp>
 
 // System include(s).
 #include <chrono>
@@ -33,7 +34,7 @@
 
 namespace po = boost::program_options;
 
-int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
+int seq_run(const traccc::seeding_input_config& /*i_cfg*/,
             const traccc::common_options& common_opts,
             const traccc::detector_input_options& det_opts, bool run_cpu) {
 
@@ -59,9 +60,11 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
                                  host_mr);
     traccc::track_params_estimation tp(host_mr);
 
-    // KOKKOS Spacepoint Binning
-    traccc::kokkos::spacepoint_binning m_spacepoint_binning(finder_config,
-                                                            grid_config, mr);
+    vecmem::copy copy;
+
+    // Kokkos Seeding algorithm
+    traccc::kokkos::seeding_algorithm sa_kokkos{finder_config, grid_config,
+                                                filter_config, mr, copy};
 
     // performance writer
     traccc::seeding_performance_writer sd_performance_writer(
@@ -76,6 +79,10 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
         traccc::io::spacepoint_reader_output reader_output(&host_mr);
         traccc::seeding_algorithm::output_type seeds;
         traccc::track_params_estimation::output_type params;
+
+        // Instantiate Kokkos containers/collections
+        traccc::seed_collection_types::buffer seeds_kokkos_buffer(0,
+                                                                  *(mr.host));
 
         {  // Start measuring wall time
             traccc::performance::timer wall_t("Wall time", elapsedTimes);
@@ -105,8 +112,21 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
                 Seeding algorithm
             ----------------------------*/
 
-            // CPU
+            traccc::spacepoint_collection_types::buffer
+                spacepoints_kokkos_buffer(spacepoints_per_event.size(),
+                                          mr.main);
 
+            copy(vecmem::get_data(spacepoints_per_event),
+                 spacepoints_kokkos_buffer);
+
+            {
+                traccc::performance::timer t("Seeding (kokkos)", elapsedTimes);
+
+                // Reconstruct the spacepoints into seeds.
+                seeds_kokkos_buffer = sa_kokkos(spacepoints_kokkos_buffer);
+            }  // stop measuring seedin kokkos timer
+
+            // CPU
             if (run_cpu) {
                 traccc::performance::timer t("Seeding  (cpu)", elapsedTimes);
                 seeds = sa(spacepoints_per_event);
@@ -156,7 +176,7 @@ int main(int argc, char* argv[]) {
     desc.add_options()("help,h", "Give some help with the program's options");
     traccc::common_options common_opts(desc);
     traccc::detector_input_options det_opts(desc);
-    traccc::seeding_input_options seeding_input_cfg(desc);
+    traccc::seeding_input_config seeding_input_cfg(desc);
     desc.add_options()("run-cpu", po::value<bool>()->default_value(false),
                        "run cpu tracking as well");
 
@@ -173,11 +193,8 @@ int main(int argc, char* argv[]) {
     seeding_input_cfg.read(vm);
     auto run_cpu = vm["run-cpu"].as<bool>();
 
-    // Tell the user what's happening.
-    std::cout << "\nRunning the tracking chain using Kokkos\n\n"
-              << common_opts << "\n"
-              << det_opts << "\n"
-              << seeding_input_cfg << "\n"
+    std::cout << "Running " << argv[0] << " " << det_opts.detector_file << " "
+              << common_opts.input_directory << " " << common_opts.events
               << std::endl;
 
     int ret = seq_run(seeding_input_cfg, common_opts, det_opts, run_cpu);
