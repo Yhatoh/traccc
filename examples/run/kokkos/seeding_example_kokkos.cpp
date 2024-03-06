@@ -34,7 +34,8 @@
 namespace po = boost::program_options;
 
 int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
-            const traccc::common_options& common_opts, bool run_cpu) {
+            const traccc::common_options& common_opts
+            const traccc::detector_input_options& det_opts,, bool run_cpu) {
 
     // Read the surface transforms
     auto [surface_transforms, _] =
