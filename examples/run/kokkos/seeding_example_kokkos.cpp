@@ -8,6 +8,7 @@
 #include "traccc/efficiency/seeding_performance_writer.hpp"
 #include "traccc/io/read_geometry.hpp"
 #include "traccc/io/read_spacepoints.hpp"
+#include "traccc/io/utils.hpp"
 #include "traccc/kokkos/seeding/seeding_algorithm.hpp"
 #include "traccc/options/common_options.hpp"
 #include "traccc/options/detector_input_options.hpp"
@@ -80,8 +81,8 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
     auto [host_det, names] =
         detray::io::read_detector<host_detector_type>(host_mr, reader_cfg);
     // Read the surface transforms
-    auto [surface_transforms, _] =
-        traccc::io::read_geometry(det_opts.detector_file);
+    traccc::geometry surface_transforms =
+        traccc::io::alt_read_geometry(host_det);
 
     // Kokkos Seeding algorithm
     traccc::kokkos::seeding_algorithm sa_kokkos{finder_config, grid_config,
