@@ -18,6 +18,15 @@
 #include "traccc/seeding/seeding_algorithm.hpp"
 #include "traccc/seeding/track_params_estimation.hpp"
 
+// Detray include(s).
+#include "detray/core/detector.hpp"
+#include "detray/core/detector_metadata.hpp"
+#include "detray/detectors/bfield.hpp"
+#include "detray/io/frontend/detector_reader.hpp"
+#include "detray/navigation/navigator.hpp"
+#include "detray/propagator/propagator.hpp"
+#include "detray/propagator/rk_stepper.hpp"
+
 // VecMem include(s).
 #include <vecmem/memory/host_memory_resource.hpp>
 #include <vecmem/utils/copy.hpp>
@@ -36,10 +45,9 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
             const traccc::common_options& common_opts,
             const traccc::detector_input_options& det_opts, bool run_cpu) {
 
-    // Read the surface transforms
-    auto [surface_transforms, _] =
-        traccc::io::read_geometry(det_opts.detector_file);
-
+    // Type declarations
+    using host_detector_type = detray::detector<>;
+    
     // Output stats
     uint64_t n_modules = 0;
     uint64_t n_spacepoints = 0;
@@ -57,6 +65,23 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
     traccc::track_params_estimation tp(host_mr);
 
     vecmem::copy copy;
+    
+    // Read the detector
+    detray::io::detector_reader_config reader_cfg{};
+    
+    reader_cfg.add_file(traccc::io::data_directory() + det_opts.detector_file);
+    if (!det_opts.material_file.empty()) {
+        reader_cfg.add_file(traccc::io::data_directory() +
+                            det_opts.material_file);
+    }
+    if (!det_opts.grid_file.empty()) {
+        reader_cfg.add_file(traccc::io::data_directory() + det_opts.grid_file);
+    }
+    auto [host_det, names] =
+        detray::io::read_detector<host_detector_type>(host_mr, reader_cfg);
+    // Read the surface transforms
+    auto [surface_transforms, _] =
+        traccc::io::read_geometry(det_opts.detector_file);
 
     // Kokkos Seeding algorithm
     traccc::kokkos::seeding_algorithm sa_kokkos{finder_config, grid_config,
@@ -97,7 +122,7 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
             /*----------------------------
                 Seeding algorithm
             ----------------------------*/
-
+            
             traccc::spacepoint_collection_types::buffer
                 spacepoints_kokkos_buffer(spacepoints_per_event.size(),
                                           mr.main);
