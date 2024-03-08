@@ -1,0 +1,12 @@
+{
+    "header": {
+        "common": {
+            "version": "detray - 0.44.0",
+            "detector": "toy_detector",
+            "date": "2024-03-07T 15:04:49Z",
+            "tag": "material_maps"
+        },
+        "grid_count": 0
+    },
+    "data": null
+}

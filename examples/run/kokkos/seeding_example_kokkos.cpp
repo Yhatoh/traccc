@@ -38,7 +38,8 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
 
     // Read the surface transforms
     auto [surface_transforms, _] =
-    traccc::io::read_geometry(det_opts.detector_file);
+        traccc::io::read_geometry(det_opts.detector_file);
+
     // Output stats
     uint64_t n_modules = 0;
     uint64_t n_spacepoints = 0;
