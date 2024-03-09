@@ -54,10 +54,12 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
     uint64_t n_spacepoints = 0;
     uint64_t n_seeds = 0;
     uint64_t n_seeds_kokkos = 0;
+
     // Configs
     traccc::seedfinder_config finder_config;
     traccc::spacepoint_grid_config grid_config(finder_config);
     traccc::seedfilter_config filter_config;
+
     // Memory resources used by the application.
     vecmem::host_memory_resource host_mr;
     traccc::memory_resource mr{host_mr, &host_mr};
@@ -69,7 +71,6 @@ int seq_run(const traccc::seeding_input_options& /*i_cfg*/,
     
     // Read the detector
     detray::io::detector_reader_config reader_cfg{};
-    
     reader_cfg.add_file(traccc::io::data_directory() + det_opts.detector_file);
     if (!det_opts.material_file.empty()) {
         reader_cfg.add_file(traccc::io::data_directory() +
