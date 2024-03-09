@@ -75,7 +75,7 @@ seed_finding::output_type seed_finding::operator()(
             (globalCounter_device_ptr + i)->m_nMidTop = 0;
             (globalCounter_device_ptr + i)->m_nTriplets = 0;
         });
-
+     
     // Count the number of doublets that we need to produce.
     {
         sp_grid_const_view sp_grid = g2_view;
@@ -85,6 +85,7 @@ seed_finding::output_type seed_finding::operator()(
             doublet_counter_buffer;
         unsigned int* nMidBot = &((*globalCounter_device).m_nMidBot);
         unsigned int* nMidTop = &((*globalCounter_device).m_nMidTop);
+        std::cout << "before" << std::endl;
         Kokkos::parallel_for(
             "count_doublets", m_copy.get_size(sp_grid_prefix_sum_buff),
             KOKKOS_LAMBDA(const uint64_t i) {
@@ -92,8 +93,8 @@ seed_finding::output_type seed_finding::operator()(
                                        sp_prefix_sum, doublet_counter, *nMidBot,
                                        *nMidTop);
             });
+        std::cout << "after" << std::endl;
     }
-
     // Get the summary values.
     vecmem::unique_alloc_ptr<device::seeding_global_counter>
         globalCounter_host =
@@ -278,6 +279,7 @@ seed_finding::output_type seed_finding::operator()(
                                      triplet_view, dataPos, seed_view);
             });
     }
+
 
     return seed_buffer;
 }
