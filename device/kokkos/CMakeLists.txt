@@ -22,5 +22,5 @@ traccc_add_library( traccc_kokkos kokkos TYPE SHARED
 )
 
 target_link_libraries( traccc_kokkos 
-  PUBLIC traccc::core vecmem::core Kokkos::kokkos detray::core detray::utils
-  PRIVATE traccc::device_common )
+  PUBLIC traccc::core vecmem::core detray::core detray::utils
+  PRIVATE traccc::device_common Kokkos::kokkos)
