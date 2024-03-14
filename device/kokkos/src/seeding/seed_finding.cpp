@@ -83,17 +83,28 @@ seed_finding::output_type seed_finding::operator()(
             sp_prefix_sum = sp_grid_prefix_sum_buff;
         device::doublet_counter_collection_types::view doublet_counter =
             doublet_counter_buffer;
+
+        Kokkos::View<sp_grid_const_view> sp_grid_view("sp_grid");
+        sp_grid_view() = sp_grid;
+        Kokkos::View<vecmem::data::vector_view<const device::prefix_sum_element_t>> sp_prefix_sum_view("sp_prefix_sum");
+        sp_prefix_sum_view() = sp_prefix_sum;
+        Kokkos::View<device::doublet_counter_collection_types::view> doublet_counter_view("doublet_counter");
+        doublet_counter_view() = doublet_counter;
+
         unsigned int* nMidBot = &((*globalCounter_device).m_nMidBot);
         unsigned int* nMidTop = &((*globalCounter_device).m_nMidTop);
-        std::cout << "before" << std::endl;
+
+        std::cout << "before..." << std::endl;
+
         Kokkos::parallel_for(
             "count_doublets", m_copy.get_size(sp_grid_prefix_sum_buff),
             KOKKOS_LAMBDA(const uint64_t i) {
-                device::count_doublets(i, m_seedfinder_config, sp_grid,
-                                       sp_prefix_sum, doublet_counter, *nMidBot,
-                                       *nMidTop);
+                device::count_doublets(i, m_seedfinder_config, sp_grid_view(),
+                                       sp_prefix_sum_view(), doublet_counter_view(),
+                                       *nMidBot, *nMidTop);
             });
-        std::cout << "after" << std::endl;
+
+        std::cout << "after..." << std::endl;
     }
     // Get the summary values.
     vecmem::unique_alloc_ptr<device::seeding_global_counter>
