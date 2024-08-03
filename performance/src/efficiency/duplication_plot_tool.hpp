@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2022-2023 CERN for the benefit of the ACTS project
+ * (c) 2022-2024 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -30,10 +30,10 @@ class duplication_plot_tool {
     /// @brief The nested configuration struct
     struct config {
         std::map<std::string, plot_helpers::binning> var_binning = {
-            {"Eta", plot_helpers::binning("#eta", 40, -4, 4)},
-            {"Phi", plot_helpers::binning("#phi", 100, -3.15, 3.15)},
-            {"Pt", plot_helpers::binning("pT [GeV/c]", 40, 0, 100)},
-            {"Num", plot_helpers::binning("N", 30, -0.5, 29.5)}};
+            {"Eta", plot_helpers::binning("#eta", 40, -4.f, 4.f)},
+            {"Phi", plot_helpers::binning("#phi", 100, -3.15f, 3.15f)},
+            {"Pt", plot_helpers::binning("pT [GeV/c]", 40, 0.f, 100.f)},
+            {"Num", plot_helpers::binning("N", 30, -0.5f, 29.5f)}};
     };
 
     /// @brief Nested Cache struct
@@ -109,10 +109,10 @@ class duplication_plot_tool {
     /// @param nDuplicatedTracks the number of duplicated tracks
     void fill(duplication_plot_cache& cache, const particle& truth_particle,
               size_t n_duplicated_tracks) const {
-        const auto t_phi = getter::phi(truth_particle.mom);
-        const auto t_eta = getter::eta(truth_particle.mom);
-        const auto t_pT =
-            getter::perp(vector2{truth_particle.mom[0], truth_particle.mom[1]});
+        const auto t_phi = getter::phi(truth_particle.momentum);
+        const auto t_eta = getter::eta(truth_particle.momentum);
+        const auto t_pT = getter::perp(
+            vector2{truth_particle.momentum[0], truth_particle.momentum[1]});
 
         // Avoid unused variable warnings when building the code without ROOT.
         (void)t_phi;

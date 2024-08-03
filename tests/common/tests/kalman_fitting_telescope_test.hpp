@@ -11,7 +11,7 @@
 #include "kalman_fitting_test.hpp"
 
 // Detray include(s).
-#include "detray/detectors/create_telescope_detector.hpp"
+#include "detray/detectors/build_telescope_detector.hpp"
 #include "detray/geometry/mask.hpp"
 #include "detray/geometry/shapes/rectangle2D.hpp"
 #include "detray/io/frontend/detector_writer.hpp"
@@ -24,7 +24,7 @@ class KalmanFittingTelescopeTests : public KalmanFittingTests {
 
     public:
     /// Plane alignment direction (aligned to x-axis)
-    static const inline detray::detail::ray<transform3> traj{
+    static const inline detray::detail::ray<traccc::default_algebra> traj{
         {0, 0, 0}, 0, {1, 0, 0}, -1};
 
     /// Position of planes (in mm unit)
@@ -50,12 +50,12 @@ class KalmanFittingTelescopeTests : public KalmanFittingTests {
 
     /// Standard deviations for seed track parameters
     static constexpr std::array<scalar, e_bound_size> stddevs = {
-        0.03 * detray::unit<scalar>::mm,
-        0.03 * detray::unit<scalar>::mm,
-        0.017,
-        0.017,
-        0.001 / detray::unit<scalar>::GeV,
-        1 * detray::unit<scalar>::ns};
+        0.03f * detray::unit<scalar>::mm,
+        0.03f * detray::unit<scalar>::mm,
+        0.017f,
+        0.017f,
+        0.001f / detray::unit<scalar>::GeV,
+        1.f * detray::unit<scalar>::ns};
 
     void consistency_tests(const track_state_collection_types::host&
                                track_states_per_track) const {
@@ -77,12 +77,13 @@ class KalmanFittingTelescopeTests : public KalmanFittingTests {
         tel_cfg.pilot_track(traj);
 
         // Create telescope detector
-        auto [det, name_map] = create_telescope_detector(host_mr, tel_cfg);
+        auto [det, name_map] = build_telescope_detector(host_mr, tel_cfg);
 
         // Write detector file
         auto writer_cfg = detray::io::detector_writer_config{}
                               .format(detray::io::format::json)
                               .replace_files(true)
+                              .write_material(true)
                               .path(std::get<0>(GetParam()));
         detray::io::write_detector(det, name_map, writer_cfg);
     }

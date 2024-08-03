@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2022 CERN for the benefit of the ACTS project
+ * (c) 2022-2024 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -8,15 +8,29 @@
 #pragma once
 
 // Project include(s).
+#include "traccc/clusterization/clustering_config.hpp"
 #include "traccc/cuda/clusterization/clusterization_algorithm.hpp"
+#include "traccc/cuda/clusterization/measurement_sorting_algorithm.hpp"
+#include "traccc/cuda/clusterization/spacepoint_formation_algorithm.hpp"
+#include "traccc/cuda/finding/finding_algorithm.hpp"
+#include "traccc/cuda/fitting/fitting_algorithm.hpp"
 #include "traccc/cuda/seeding/seeding_algorithm.hpp"
 #include "traccc/cuda/seeding/track_params_estimation.hpp"
 #include "traccc/cuda/utils/stream.hpp"
-#include "traccc/device/container_h2d_copy_alg.hpp"
 #include "traccc/edm/cell.hpp"
+#include "traccc/edm/track_state.hpp"
+#include "traccc/fitting/kalman_filter/kalman_fitter.hpp"
 #include "traccc/utils/algorithm.hpp"
 
+// Detray include(s).
+#include "detray/core/detector.hpp"
+#include "detray/detectors/bfield.hpp"
+#include "detray/navigation/navigator.hpp"
+#include "detray/propagator/propagator.hpp"
+#include "detray/propagator/rk_stepper.hpp"
+
 // VecMem include(s).
+#include <vecmem/containers/vector.hpp>
 #include <vecmem/memory/binary_page_memory_resource.hpp>
 #include <vecmem/memory/cuda/device_memory_resource.hpp>
 #include <vecmem/memory/memory_resource.hpp>
@@ -32,23 +46,54 @@ namespace traccc::cuda {
 /// At least as much as is implemented in the project at any given moment.
 ///
 class full_chain_algorithm
-    : public algorithm<bound_track_parameters_collection_types::host(
+    : public algorithm<vecmem::vector<fitting_result<default_algebra>>(
           const cell_collection_types::host&,
           const cell_module_collection_types::host&)> {
 
     public:
+    /// @name Type declaration(s)
+    /// @{
+
+    /// (Host) Detector type used during track finding and fitting
+    using host_detector_type = detray::detector<detray::default_metadata,
+                                                detray::host_container_types>;
+    /// (Device) Detector type used during track finding and fitting
+    using device_detector_type =
+        detray::detector<detray::default_metadata,
+                         detray::device_container_types>;
+
+    /// Stepper type used by the track finding and fitting algorithms
+    using stepper_type =
+        detray::rk_stepper<detray::bfield::const_field_t::view_t,
+                           device_detector_type::algebra_type,
+                           detray::constrained_step<>>;
+    /// Navigator type used by the track finding and fitting algorithms
+    using navigator_type = detray::navigator<const device_detector_type>;
+
+    /// Clustering algorithm type
+    using clustering_algorithm = traccc::cuda::clusterization_algorithm;
+    /// Track finding algorithm type
+    using finding_algorithm =
+        traccc::cuda::finding_algorithm<stepper_type, navigator_type>;
+    /// Track fitting algorithm type
+    using fitting_algorithm = traccc::cuda::fitting_algorithm<
+        traccc::kalman_fitter<stepper_type, navigator_type>>;
+
+    /// @}
+
     /// Algorithm constructor
     ///
     /// @param mr The memory resource to use for the intermediate and result
     ///           objects
-    /// @param target_cells_per_partition The average number of cells in each
-    /// partition.
     ///
     full_chain_algorithm(vecmem::memory_resource& host_mr,
-                         const unsigned short target_cells_per_partiton,
+                         const clustering_config& clustering_config,
                          const seedfinder_config& finder_config,
                          const spacepoint_grid_config& grid_config,
-                         const seedfilter_config& filter_config);
+                         const seedfilter_config& filter_config,
+                         const finding_algorithm::config_type& finding_config,
+                         const fitting_algorithm::config_type& fitting_config,
+                         host_detector_type* detector);
 
     /// Copy constructor
     ///
@@ -84,23 +129,55 @@ class full_chain_algorithm
     /// (Asynchronous) Memory copy object
     mutable vecmem::cuda::async_copy m_copy;
 
+    /// Constant B field for the (seed) track parameter estimation
+    traccc::vector3 m_field_vec;
+    /// Constant B field for the track finding and fitting
+    detray::bfield::const_field_t m_field;
+
+    /// Host detector
+    host_detector_type* m_detector;
+    /// Buffer holding the detector's payload on the device
+    host_detector_type::buffer_type m_device_detector;
+    /// View of the detector's payload on the device
+    host_detector_type::view_type m_device_detector_view;
+
     /// @name Sub-algorithms used by this full-chain algorithm
     /// @{
 
-    /// The average number of cells in each partition.
-    /// Adapt to different GPUs' capabilities.
-    unsigned short m_target_cells_per_partition;
     /// Clusterization algorithm
     clusterization_algorithm m_clusterization;
+    /// Measurement sorting algorithm
+    measurement_sorting_algorithm m_measurement_sorting;
+    /// Spacepoint formation algorithm
+    spacepoint_formation_algorithm m_spacepoint_formation;
     /// Seeding algorithm
     seeding_algorithm m_seeding;
     /// Track parameter estimation algorithm
     track_params_estimation m_track_parameter_estimation;
 
-    /// Configs
+    /// Track finding algorithm
+    finding_algorithm m_finding;
+    /// Track fitting algorithm
+    fitting_algorithm m_fitting;
+
+    /// @}
+
+    /// @name Algorithm configurations
+    /// @{
+
+    /// Configuration for clustering
+    clustering_config m_clustering_config;
+    /// Configuration for the seed finding
     seedfinder_config m_finder_config;
+    /// Configuration for the spacepoint grid formation
     spacepoint_grid_config m_grid_config;
+    /// Configuration for the seed filtering
     seedfilter_config m_filter_config;
+
+    /// Configuration for the track finding
+    finding_algorithm::config_type m_finding_config;
+    /// Configuration for the track fitting
+    fitting_algorithm::config_type m_fitting_config;
 
     /// @}
 

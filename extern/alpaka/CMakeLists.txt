@@ -18,14 +18,10 @@ message( STATUS "Building Alpaka as part of the TRACCC project" )
 
 # Declare where to get Alpaka from.
 set( TRACCC_ALPAKA_SOURCE
-   "URL;https://github.com/alpaka-group/alpaka/archive/refs/tags/1.0.0.tar.gz;URL_MD5;e4bcc48411eed1daf8bc33a031a9f7dc"
+   "URL;https://github.com/alpaka-group/alpaka/archive/refs/tags/1.1.0.tar.gz;URL_MD5;e788ec42c8c4ebd87d12647940a01458"
    CACHE STRING "Source for Alpaka, when built as part of this project" )
 mark_as_advanced( TRACCC_ALPAKA_SOURCE )
 FetchContent_Declare( Alpaka ${TRACCC_ALPAKA_SOURCE} )
-
-# Default options for the Alpaka build.
-set( alpaka_ACC_CPU_B_SEQ_T_SEQ_ENABLE TRUE CACHE BOOL
-   "Enable the serial backend of Alpaka" )
 
 #Turn off build testing
 if( DEFINED CACHE{BUILD_TESTING} )

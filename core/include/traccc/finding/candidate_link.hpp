@@ -20,7 +20,7 @@ namespace traccc {
 struct candidate_link {
 
     // Type of index
-    using link_index_type = thrust::pair<unsigned int, unsigned int>;
+    using link_index_type = thrust::pair<int, unsigned int>;
 
     // Index of link from the previous step
     link_index_type previous;
@@ -30,6 +30,9 @@ struct candidate_link {
 
     // Index to the initial seed
     unsigned int seed_idx;
+
+    // How many times it skipped a surface
+    unsigned int n_skipped;
 };
 
 }  // namespace traccc

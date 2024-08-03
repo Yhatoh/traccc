@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2022-2023 CERN for the benefit of the ACTS project
+ * (c) 2022-2024 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -85,9 +85,9 @@ class nseed_performance_writer {
                 }
             }
 
-            const scalar eta = getter::eta(ptc.mom);
-            const scalar phi = getter::phi(ptc.mom);
-            const scalar pT = getter::perp(ptc.mom);
+            const scalar eta = getter::eta(ptc.momentum);
+            const scalar phi = getter::phi(ptc.momentum);
+            const scalar pT = getter::perp(ptc.momentum);
 
             write_track_row(ev, ptc.particle_id, pass, ptc.charge, eta, phi,
                             pT);
@@ -104,7 +104,7 @@ class nseed_performance_writer {
                         std::optional<std::size_t>);
 
     void write_track_header();
-    void write_track_row(std::size_t, std::size_t, bool, int, scalar, scalar,
+    void write_track_row(std::size_t, std::size_t, bool, scalar, scalar, scalar,
                          scalar);
 
     std::string _prefix;

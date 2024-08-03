@@ -15,17 +15,13 @@
 #include "traccc/utils/algorithm.hpp"
 #include "traccc/utils/memory_resource.hpp"
 
-// VecMem include(s).
-#include <vecmem/utils/copy.hpp>
-
 namespace traccc::alpaka {
 
 /// track parameter estimation for alpaka
 struct track_params_estimation
     : public algorithm<bound_track_parameters_collection_types::buffer(
           const spacepoint_collection_types::const_view&,
-          const seed_collection_types::const_view&,
-          const cell_module_collection_types::const_view&, const vector3&,
+          const seed_collection_types::const_view&, const vector3&,
           const std::array<traccc::scalar, traccc::e_bound_size>&)> {
 
     public:
@@ -50,15 +46,14 @@ struct track_params_estimation
     output_type operator()(
         const spacepoint_collection_types::const_view& spacepoints_view,
         const seed_collection_types::const_view& seeds_view,
-        const cell_module_collection_types::const_view& modules_view,
         const vector3& bfield,
         const std::array<traccc::scalar, traccc::e_bound_size>& = {
-            0.02 * detray::unit<traccc::scalar>::mm,
-            0.03 * detray::unit<traccc::scalar>::mm,
-            1. * detray::unit<traccc::scalar>::degree,
-            1. * detray::unit<traccc::scalar>::degree,
-            0.01 / detray::unit<traccc::scalar>::GeV,
-            1 * detray::unit<traccc::scalar>::ns}) const override;
+            0.02f * detray::unit<traccc::scalar>::mm,
+            0.03f * detray::unit<traccc::scalar>::mm,
+            1.f * detray::unit<traccc::scalar>::degree,
+            1.f * detray::unit<traccc::scalar>::degree,
+            0.01f / detray::unit<traccc::scalar>::GeV,
+            1.f * detray::unit<traccc::scalar>::ns}) const override;
 
     private:
     /// Memory resource used by the algorithm

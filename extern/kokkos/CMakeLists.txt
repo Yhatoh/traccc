@@ -18,7 +18,7 @@ message( STATUS "Building Kokkos as part of the TRACCC project" )
 
 # Declare where to get Kokkos from.
 set( TRACCC_KOKKOS_SOURCE
-   "URL;https://github.com/kokkos/kokkos/archive/refs/tags/4.1.00.tar.gz;URL_MD5;a5f096bd8ad01b97fdc7a32583b17a33"
+   "URL;https://github.com/kokkos/kokkos/archive/refs/tags/4.3.01.tar.gz;URL_MD5;243de871b3dc2cf3990c1c404032df83"
    CACHE STRING "Source for Kokkos, when built as part of this project" )
 mark_as_advanced( TRACCC_KOKKOS_SOURCE )
 FetchContent_Declare( Kokkos ${TRACCC_KOKKOS_SOURCE} )
@@ -26,10 +26,8 @@ FetchContent_Declare( Kokkos ${TRACCC_KOKKOS_SOURCE} )
 # Default options for the Kokkos build.
 set( Kokkos_ENABLE_SERIAL TRUE CACHE BOOL
    "Enable the serial backend of Kokkos" )
-if( TRACCC_BUILD_CUDA )
-   set( Kokkos_ENABLE_CUDA TRUE CACHE BOOL
-      "Enable the CUDA backend of Kokkos" )
-endif()
+set( BUILD_SHARED_LIBS TRUE CACHE BOOL
+   "Enable building of shared libs in Kokkos" )
 
 # Get it into the current directory.
 FetchContent_MakeAvailable( Kokkos )

@@ -1,38 +1,29 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2022-2023 CERN for the benefit of the ACTS project
+ * (c) 2022-2024 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
 
 // CUDA Library include(s).
+#include "../sanity/contiguous_on.cuh"
+#include "../sanity/ordered_on.cuh"
+#include "../utils/barrier.hpp"
+#include "../utils/cuda_error_handling.hpp"
 #include "../utils/utils.hpp"
+#include "traccc/clusterization/clustering_config.hpp"
+#include "traccc/clusterization/device/ccl_kernel_definitions.hpp"
 #include "traccc/cuda/clusterization/clusterization_algorithm.hpp"
-#include "traccc/cuda/utils/barrier.hpp"
-#include "traccc/cuda/utils/definitions.hpp"
+#include "traccc/cuda/utils/thread_id.hpp"
+#include "traccc/utils/projections.hpp"
+#include "traccc/utils/relations.hpp"
 
 // Project include(s)
-#include "traccc/clusterization/device/aggregate_cluster.hpp"
 #include "traccc/clusterization/device/ccl_kernel.hpp"
-#include "traccc/clusterization/device/form_spacepoints.hpp"
-#include "traccc/clusterization/device/reduce_problem_cell.hpp"
 
 // Vecmem include(s).
+#include <cstring>
 #include <vecmem/utils/copy.hpp>
-
-// System include(s).
-#include <algorithm>
-
-namespace {
-
-/// These indices in clusterization will only range from 0 to
-/// max_cells_per_partition, so we only need a short.
-using index_t = unsigned short;
-
-static constexpr int TARGET_CELLS_PER_THREAD = 8;
-static constexpr int MAX_CELLS_PER_THREAD = 12;
-
-}  // namespace
 
 namespace traccc::cuda {
 
@@ -40,128 +31,117 @@ namespace kernels {
 
 /// CUDA kernel for running @c traccc::device::ccl_kernel
 __global__ void ccl_kernel(
+    const clustering_config cfg,
     const cell_collection_types::const_view cells_view,
     const cell_module_collection_types::const_view modules_view,
-    const index_t max_cells_per_partition,
-    const index_t target_cells_per_partition,
     measurement_collection_types::view measurements_view,
-    unsigned int& measurement_count,
-    vecmem::data::vector_view<unsigned int> cell_links) {
-    __shared__ unsigned int partition_start, partition_end;
-    __shared__ unsigned int outi;
-    extern __shared__ index_t shared_v[];
-    index_t* f = &shared_v[0];
-    index_t* f_next = &shared_v[max_cells_per_partition];
+    vecmem::data::vector_view<unsigned int> cell_links,
+    vecmem::data::vector_view<device::details::index_t> f_backup_view,
+    vecmem::data::vector_view<device::details::index_t> gf_backup_view,
+    vecmem::data::vector_view<unsigned char> adjc_backup_view,
+    vecmem::data::vector_view<device::details::index_t> adjv_backup_view,
+    unsigned int* backup_mutex_ptr) {
+
+    __shared__ std::size_t partition_start, partition_end;
+    __shared__ std::size_t outi;
+    extern __shared__ device::details::index_t shared_v[];
+    vecmem::device_atomic_ref<unsigned int> backup_mutex(*backup_mutex_ptr);
+
+    using vector_size_t =
+        vecmem::data::vector_view<device::details::index_t>::size_type;
+
+    vecmem::data::vector_view<device::details::index_t> f_view{
+        static_cast<vector_size_t>(cfg.max_partition_size()), shared_v};
+    vecmem::data::vector_view<device::details::index_t> gf_view{
+        static_cast<vector_size_t>(cfg.max_partition_size()),
+        shared_v + cfg.max_partition_size()};
     traccc::cuda::barrier barry_r;
+    const cuda::thread_id1 thread_id;
 
-    device::ccl_kernel(threadIdx.x, blockDim.x, blockIdx.x, cells_view,
-                       modules_view, max_cells_per_partition,
-                       target_cells_per_partition, partition_start,
-                       partition_end, outi, f, f_next, barry_r,
-                       measurements_view, measurement_count, cell_links);
-}
-
-__global__ void form_spacepoints(
-    measurement_collection_types::const_view measurements_view,
-    cell_module_collection_types::const_view modules_view,
-    const unsigned int measurement_count,
-    spacepoint_collection_types::view spacepoints_view) {
-
-    device::form_spacepoints(threadIdx.x + blockIdx.x * blockDim.x,
-                             measurements_view, modules_view, measurement_count,
-                             spacepoints_view);
+    device::ccl_kernel(cfg, thread_id, cells_view, modules_view,
+                       partition_start, partition_end, outi, f_view, gf_view,
+                       f_backup_view, gf_backup_view, adjc_backup_view,
+                       adjv_backup_view, backup_mutex, barry_r,
+                       measurements_view, cell_links);
 }
 
 }  // namespace kernels
 
 clusterization_algorithm::clusterization_algorithm(
     const traccc::memory_resource& mr, vecmem::copy& copy, stream& str,
-    const unsigned short target_cells_per_partition)
+    const config_type& config)
     : m_mr(mr),
       m_copy(copy),
       m_stream(str),
-      m_target_cells_per_partition(target_cells_per_partition) {}
+      m_config(config),
+      m_f_backup(m_config.backup_size(), m_mr.main),
+      m_gf_backup(m_config.backup_size(), m_mr.main),
+      m_adjc_backup(m_config.backup_size(), m_mr.main),
+      m_adjv_backup(m_config.backup_size() * 8, m_mr.main),
+      m_backup_mutex(vecmem::make_unique_alloc<unsigned int>(m_mr.main)) {
+    m_copy.get().setup(m_f_backup)->wait();
+    m_copy.get().setup(m_gf_backup)->wait();
+    m_copy.get().setup(m_adjc_backup)->wait();
+    m_copy.get().setup(m_adjv_backup)->wait();
+    TRACCC_CUDA_ERROR_CHECK(cudaMemset(
+        m_backup_mutex.get(), 0,
+        sizeof(std::remove_extent_t<decltype(m_backup_mutex)::element_type>)));
+}
 
 clusterization_algorithm::output_type clusterization_algorithm::operator()(
     const cell_collection_types::const_view& cells,
     const cell_module_collection_types::const_view& modules) const {
 
+    assert(is_contiguous_on(cell_module_projection(), m_mr.main, m_copy,
+                            m_stream, cells));
+    assert(is_ordered_on(channel0_major_cell_order_relation(), m_mr.main,
+                         m_copy, m_stream, cells));
+
     // Get a convenience variable for the stream that we'll be using.
     cudaStream_t stream = details::get_stream(m_stream);
 
-    // Number of cells
+    // Get the number of cells
     const cell_collection_types::view::size_type num_cells =
-        m_copy.get_size(cells);
+        m_copy.get().get_size(cells);
 
+    // Create the result object, overestimating the number of measurements.
+    measurement_collection_types::buffer measurements{
+        num_cells, m_mr.main, vecmem::data::buffer_type::resizable};
+    m_copy.get().setup(measurements)->ignore();
+
+    // If there are no cells, return right away.
     if (num_cells == 0) {
-        return {output_type::first_type{0, m_mr.main},
-                output_type::second_type{0, m_mr.main}};
+        return measurements;
     }
 
-    // Create result object for the CCL kernel with size overestimation
-    measurement_collection_types::buffer measurements_buffer(num_cells,
-                                                             m_mr.main);
-    m_copy.setup(measurements_buffer);
-
-    // Counter for number of measurements
-    vecmem::unique_alloc_ptr<unsigned int> num_measurements_device =
-        vecmem::make_unique_alloc<unsigned int>(m_mr.main);
-    CUDA_ERROR_CHECK(cudaMemsetAsync(num_measurements_device.get(), 0,
-                                     sizeof(unsigned int), stream));
-
-    const unsigned short max_cells_per_partition =
-        (m_target_cells_per_partition * MAX_CELLS_PER_THREAD +
-         TARGET_CELLS_PER_THREAD - 1) /
-        TARGET_CELLS_PER_THREAD;
-    const unsigned int threads_per_partition =
-        (m_target_cells_per_partition + TARGET_CELLS_PER_THREAD - 1) /
-        TARGET_CELLS_PER_THREAD;
-    const unsigned int num_partitions =
-        (num_cells + m_target_cells_per_partition - 1) /
-        m_target_cells_per_partition;
-
-    // Create buffer for linking cells to their spacepoints.
+    // Create buffer for linking cells to their measurements.
+    //
+    // @todo Construct cell clusters on demand in a member function for
+    // debugging.
+    //
     vecmem::data::vector_buffer<unsigned int> cell_links(num_cells, m_mr.main);
-    m_copy.setup(cell_links);
+    m_copy.get().setup(cell_links)->ignore();
 
     // Launch ccl kernel. Each thread will handle a single cell.
-    kernels::
-        ccl_kernel<<<num_partitions, threads_per_partition,
-                     2 * max_cells_per_partition * sizeof(index_t), stream>>>(
-            cells, modules, max_cells_per_partition,
-            m_target_cells_per_partition, measurements_buffer,
-            *num_measurements_device, cell_links);
+    std::size_t num_blocks =
+        (num_cells + (m_config.target_partition_size()) - 1) /
+        m_config.target_partition_size();
 
-    CUDA_ERROR_CHECK(cudaGetLastError());
+    // Ensure that the chosen maximum cell count is compatible with the maximum
+    // stack size.
+    assert(m_config.max_cells_per_thread <=
+           device::details::CELLS_PER_THREAD_STACK_LIMIT);
 
-    // Copy number of measurements to host
-    vecmem::unique_alloc_ptr<unsigned int> num_measurements_host =
-        vecmem::make_unique_alloc<unsigned int>(
-            (m_mr.host != nullptr) ? *(m_mr.host) : m_mr.main);
-    CUDA_ERROR_CHECK(cudaMemcpyAsync(
-        num_measurements_host.get(), num_measurements_device.get(),
-        sizeof(unsigned int), cudaMemcpyDeviceToHost, stream));
-    m_stream.synchronize();
+    kernels::ccl_kernel<<<num_blocks, m_config.threads_per_partition,
+                          2 * m_config.max_partition_size() *
+                              sizeof(device::details::index_t),
+                          stream>>>(
+        m_config, cells, modules, measurements, cell_links, m_f_backup,
+        m_gf_backup, m_adjc_backup, m_adjv_backup, m_backup_mutex.get());
+    TRACCC_CUDA_ERROR_CHECK(cudaGetLastError());
 
-    spacepoint_collection_types::buffer spacepoints_buffer(
-        *num_measurements_host, m_mr.main);
-    m_copy.setup(spacepoints_buffer);
-
-    // For the following kernel, we can now use whatever the desired number of
-    // threads per block.
-    auto spacepointsLocalSize = 1024;
-    const unsigned int num_blocks =
-        (*num_measurements_host + spacepointsLocalSize - 1) /
-        spacepointsLocalSize;
-
-    // Turn 2D measurements into 3D spacepoints
-    kernels::form_spacepoints<<<num_blocks, spacepointsLocalSize, 0, stream>>>(
-        measurements_buffer, modules, *num_measurements_host,
-        spacepoints_buffer);
-
-    CUDA_ERROR_CHECK(cudaGetLastError());
-
-    return {std::move(spacepoints_buffer), std::move(cell_links)};
+    // Return the reconstructed measurements.
+    return measurements;
 }
 
 }  // namespace traccc::cuda

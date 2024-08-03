@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2022-2023 CERN for the benefit of the ACTS project
+ * (c) 2022-2024 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -98,8 +98,8 @@ void res_plot_tool::fill(res_plot_cache& cache,
                          const particle& ptc) const {
 
     // Find index of eta and pT for resolution histogram
-    const scalar eta = getter::eta(ptc.mom);
-    const scalar pT = std::hypot(ptc.mom[0], ptc.mom[1]);
+    const scalar eta = getter::eta(ptc.momentum);
+    const scalar pT = std::hypot(ptc.momentum[0], ptc.momentum[1]);
 
     // Avoid unused variable warnings when building the code without ROOT.
     (void)cache;
@@ -189,7 +189,7 @@ void res_plot_tool::write(res_plot_cache& cache) const {
             auto res = data->Fit("gaus", "Q0S");
             gaus.GetParameters(&fit_par[0]);
             H->SetBinContent(i + 1, fit_par[2]);
-            sigmas.push_back(gaus.GetParError(2));
+            sigmas.push_back(static_cast<float>(gaus.GetParError(2)));
         }
 
         std::unique_ptr<TGraphErrors> G =

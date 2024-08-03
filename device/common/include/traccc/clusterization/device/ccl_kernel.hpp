@@ -1,6 +1,6 @@
 /** TRACCC library, part of the ACTS project (R&D line)
  *
- * (c) 2022-2023 CERN for the benefit of the ACTS project
+ * (c) 2022-2024 CERN for the benefit of the ACTS project
  *
  * Mozilla Public License Version 2.0
  */
@@ -8,7 +8,12 @@
 #pragma once
 
 // Project include(s).
+#include "traccc/clusterization/clustering_config.hpp"
+#include "traccc/clusterization/device/ccl_kernel_definitions.hpp"
+#include "traccc/definitions/hints.hpp"
 #include "traccc/definitions/qualifiers.hpp"
+#include "traccc/device/concepts/barrier.hpp"
+#include "traccc/device/concepts/thread_id.hpp"
 #include "traccc/edm/cell.hpp"
 #include "traccc/edm/measurement.hpp"
 #include "traccc/edm/spacepoint.hpp"
@@ -22,45 +27,47 @@
 
 namespace traccc::device {
 
-namespace {
-/// These indices in clusterization will only range from 0 to
-/// max_cells_per_partition, so we only need a short
-using index_t = unsigned short;
-
-static constexpr int TARGET_CELLS_PER_THREAD = 8;
-static constexpr int MAX_CELLS_PER_THREAD = 12;
-}  // namespace
-
 /// Function which reads raw detector cells and turns them into measurements.
 ///
-/// @param[in] threadId current thread index
-/// @param[in] blckDim  current thread block size
-/// @param[in] blckId   current thread block index
+/// @param[in] cfg clustering configuration
+/// @param[in] thread_id a thread identifier object
 /// @param[in] cells_view    collection of cells
 /// @param[in] modules_view  collection of modules to which the cells are linked
-/// @param[in] max_cells_per_partition maximum number of cells per thread block
-/// @param[in] target_cells_per_partition average number of cells per thread
-/// block
 /// @param partition_start    partition start point for this thread block
 /// @param partition_end      partition end point for this thread block
 /// @param outi               number of measurements for this partition
-/// @param f  array of "parent" indices for all cells in this partition
-/// @param gf array of "grandparent" indices for all cells in this partition
+/// @param f_view  array of "parent" indices for all cells in this partition
+/// @param gf_view array of "grandparent" indices for all cells in this
+///                partition
+/// @param f_backup_view global memory alternative to `f_view` for cases in
+///     which that array is not large enough
+/// @param gf_backup_view global memory alternative to `gf_view` for cases in
+///     which that array is not large enough
+/// @param adjc_backup_view global memory alternative to the adjacent cell
+///     count vector
+/// @param adjv_backup_view global memory alternative to the cell adjacency
+///     matrix fragment storage
+/// @param backup_mutex mutex lock to mediate control over the backup global
+///     memory data structures.
 /// @param barrier  A generic object for block-wide synchronisation
 /// @param[out] measurements_view collection of measurements
-/// @param[out] measurement_count number of measurements
 /// @param[out] cell_links    collection of links to measurements each cell is
 /// put into
-template <typename barrier_t>
+template <device::concepts::barrier barrier_t,
+          device::concepts::thread_id1 thread_id_t>
 TRACCC_DEVICE inline void ccl_kernel(
-    const index_t threadId, const index_t blckDim, const unsigned int blockId,
+    const clustering_config cfg, const thread_id_t& thread_id,
     const cell_collection_types::const_view cells_view,
     const cell_module_collection_types::const_view modules_view,
-    const index_t max_cells_per_partition,
-    const index_t target_cells_per_partition, unsigned int& partition_start,
-    unsigned int& partition_end, unsigned int& outi, index_t* f, index_t* gf,
-    barrier_t& barrier, measurement_collection_types::view measurements_view,
-    unsigned int& measurement_count,
+    std::size_t& partition_start, std::size_t& partition_end, std::size_t& outi,
+    vecmem::data::vector_view<details::index_t> f_view,
+    vecmem::data::vector_view<details::index_t> gf_view,
+    vecmem::data::vector_view<details::index_t> f_backup_view,
+    vecmem::data::vector_view<details::index_t> gf_backup_view,
+    vecmem::data::vector_view<unsigned char> adjc_backup_view,
+    vecmem::data::vector_view<details::index_t> adjv_backup_view,
+    vecmem::device_atomic_ref<uint32_t> backup_mutex, barrier_t& barrier,
+    measurement_collection_types::view measurements_view,
     vecmem::data::vector_view<unsigned int> cell_links);
 
 }  // namespace traccc::device

@@ -1,6 +1,6 @@
 # TRACCC library, part of the ACTS project (R&D line)
 #
-# (c) 2021-2023 CERN for the benefit of the ACTS project
+# (c) 2021-2024 CERN for the benefit of the ACTS project
 #
 # Mozilla Public License Version 2.0
 
@@ -25,38 +25,50 @@ jobs:
       matrix:
         platform:
           - name: CPU
-            container: ghcr.io/acts-project/ubuntu2004:v30
+            container: ghcr.io/acts-project/ubuntu2404:56
+            cxx_standard: "20"
             options:
-          - name: CPU
-            container: ghcr.io/acts-project/ubuntu2004:v30
-            options: -DTRACCC_USE_ROOT=FALSE
+            run_tests: true
+          - name: HIP
+            container: ghcr.io/acts-project/ubuntu2204_rocm_clang_cxx20:56
+            cxx_standard: "20"
+            options: -DTRACCC_BUILD_HIP=TRUE -DTRACCC_SETUP_ROCTHRUST=TRUE
+            run_tests: false
           - name: CUDA
-            container: ghcr.io/acts-project/ubuntu2004_cuda:v30
-            options: -DTRACCC_BUILD_CUDA=TRUE
+            container: ghcr.io/acts-project/ubuntu2404_cuda:56
+            cxx_standard: "20"
+            options: -DTRACCC_BUILD_CUDA=TRUE -DCMAKE_CUDA_FLAGS="-std=c++20"
+            run_tests: false
+          - name: SYCL
+            container: ghcr.io/acts-project/ubuntu2404_oneapi:56
+            cxx_standard: "20"
+            options: -DTRACCC_BUILD_SYCL=TRUE -DCMAKE_SYCL_FLAGS="-fsycl -fsycl-targets=spir64"
+            run_tests: true
           - name: KOKKOS
-            container: ghcr.io/acts-project/ubuntu2004:v30
+            container: ghcr.io/acts-project/ubuntu2404:56
+            cxx_standard: "20"
             options: -DTRACCC_BUILD_KOKKOS=TRUE
+            run_tests: false
           - name: ALPAKA
-            container: ghcr.io/acts-project/ubuntu2204:v33
+            container: ghcr.io/acts-project/ubuntu2404:56
+            cxx_standard: "20"
             options: -DTRACCC_BUILD_ALPAKA=TRUE
+            run_tests: false
         build:
           - Release
           - Debug
         include:
           - platform:
               name: "SYCL"
-              container: "ghcr.io/acts-project/ubuntu2004_cuda_oneapi:v37"
+              container: ghcr.io/acts-project/ubuntu2404_cuda_oneapi:56
+              cxx_standard: "20"
               options: -DTRACCC_BUILD_SYCL=TRUE -DTRACCC_BUILD_CUDA=FALSE -DVECMEM_BUILD_CUDA_LIBRARY=FALSE
             build: Release
           - platform:
               name: "SYCL"
-              container: "ghcr.io/acts-project/ubuntu2004_rocm_oneapi:v37"
+              container: ghcr.io/acts-project/ubuntu2404_rocm_oneapi:56
+              cxx_standard: "20"
               options: -DTRACCC_BUILD_SYCL=TRUE -DVECMEM_BUILD_HIP_LIBRARY=FALSE
-            build: Release
-          - platform:
-              name: "CUDA"
-              container: ghcr.io/acts-project/ubuntu2004_cuda:v30
-              options: -DTRACCC_BUILD_CUDA=TRUE -DTRACCC_ENABLE_NVTX_PROFILING=TRUE
             build: Release
     # Use BASH as the shell from the images.
     defaults:
@@ -64,18 +76,28 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v3
-      - name: Download data files
-        run: data/traccc_data_get_files.sh
       - name: Configure
         run: |
           source ${GITHUB_WORKSPACE}/.github/ci_setup.sh ${{ matrix.platform.name }}
-          cmake -DCMAKE_BUILD_TYPE=${{ matrix.build }} ${{ matrix.platform.options }} -DTRACCC_FAIL_ON_WARNINGS=TRUE -S ${GITHUB_WORKSPACE} -B build
+          cmake \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.platform.cxx_standard }} \
+            -DCMAKE_CUDA_STANDARD=${{ matrix.platform.cxx_standard }} \
+            -DCMAKE_HIP_STANDARD=${{ matrix.platform.cxx_standard }} \
+            -DCMAKE_SYCL_STANDARD=${{ matrix.platform.cxx_standard }} \
+            ${{ matrix.platform.options }} \
+            -DTRACCC_FAIL_ON_WARNINGS=TRUE \
+            -S ${GITHUB_WORKSPACE} \
+            -B build
       - name: Build
         run: |
           source ${GITHUB_WORKSPACE}/.github/ci_setup.sh ${{ matrix.platform.name }}
           cmake --build build
+      - name: Download data files
+        if: "matrix.platform.run_tests"
+        run: data/traccc_data_get_files.sh
       - name: Test
-        if: "matrix.platform.name == 'CPU'"
+        if: "matrix.platform.run_tests"
         run: |
           cd build
           source ${GITHUB_WORKSPACE}/.github/ci_setup.sh ${{ matrix.platform.name }}
